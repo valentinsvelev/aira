@@ -1,0 +1,9 @@
+AIRA demo paper C: Workflow and observability (synthetic fixture; not a real publication)
+
+A research workflow can execute independent searches in parallel before evidence synthesis.
+A deterministic evidence gate can trigger a fallback search when too few passages were found.
+Bounded loops require maximum iterations and a global execution-step budget. Observability
+records node durations, outcome statuses, branch decisions, and trace or span identifiers.
+
+A persisted research workflow should keep an auditable execution history. This file is an
+illustrative demonstration artifact, not an academic reference.

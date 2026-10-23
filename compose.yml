@@ -1,0 +1,143 @@
+# AIRA: PostgreSQL + pgvector, FastAPI backend and Next.js frontend.
+# Ollama runs natively on the host by default (Apple GPU acceleration on macOS);
+# see the optional cpu-ollama profile below for a fully containerised setup.
+# Settings come from .env (see .env.example).
+name: aira
+
+services:
+  db:
+    image: pgvector/pgvector:0.8.6-pg16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-aira}
+      POSTGRES_USER: ${POSTGRES_USER:-aira}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-aira_local}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-aira}:${POSTGRES_PASSWORD:-aira_local}@db:5432/${POSTGRES_DB:-aira}
+      PAPERS_DIR: /app/papers
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3.5:4b}
+      CHAT_TITLES_ENABLED: ${CHAT_TITLES_ENABLED:-true}
+      OLLAMA_TITLE_MODEL: ${OLLAMA_TITLE_MODEL:-qwen3.5:0.8b}
+      OLLAMA_BASE_URL: ${DOCKER_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      FAITHFULNESS_MODE: ${FAITHFULNESS_MODE:-semantic}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-sentence-transformers/all-MiniLM-L6-v2}
+      RETRIEVAL_MODE: ${RETRIEVAL_MODE:-sparse}
+      # Optional reranker service running on the host (scripts/serve-reranker.sh).
+      RERANKER_BASE_URL: ${RERANKER_BASE_URL:-http://host.docker.internal:8010}
+      RERANKER_TIMEOUT_SECONDS: ${RERANKER_TIMEOUT_SECONDS:-300}
+      TEV1_MODEL: ${TEV1_MODEL:-tev1:0.8b}
+      TEV1_SUPPORTED_PROBABILITY: ${TEV1_SUPPORTED_PROBABILITY:-0.75}
+      SIMILARITY_THRESHOLD: ${SIMILARITY_THRESHOLD:-0.78}
+      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+      WEB_SEARCH_PROVIDER: ${WEB_SEARCH_PROVIDER:-ddgs}
+      WEB_SEARCH_MAX_RESULTS: ${WEB_SEARCH_MAX_RESULTS:-4}
+      OPENALEX_API_KEY: ${OPENALEX_API_KEY:-}
+      SCHOLAR_VLLM_DR_TULU_URL: ${SCHOLAR_VLLM_DR_TULU_URL:-}
+      SCHOLAR_VLLM_ASTA_URL: ${SCHOLAR_VLLM_ASTA_URL:-}
+      SCHOLAR_VLLM_API_KEY: ${SCHOLAR_VLLM_API_KEY:-}
+      OTEL_TRACES_ENABLED: ${OTEL_TRACES_ENABLED:-false}
+      OTEL_CAPTURE_CONTENT: ${OTEL_CAPTURE_CONTENT:-false}
+      # If FastAPI auto-instrumentation is enabled, avoid noisy probe spans.
+      OTEL_PYTHON_FASTAPI_EXCLUDED_URLS: "${OTEL_PYTHON_FASTAPI_EXCLUDED_URLS:-.*/health,.*/tracing/status}"
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://phoenix:6006/v1/traces
+      PHOENIX_PROJECT_NAME: ${PHOENIX_PROJECT_NAME:-aira}
+      PHOENIX_BASE_URL: http://phoenix:6006
+      HF_HOME: /app/.cache/huggingface
+    volumes:
+      - ./.data:/app/.data
+      - ./papers:/app/papers
+      - huggingface_cache:/app/.cache/huggingface
+    # Lets the container reach Ollama/vLLM on the host on Linux too (built in on macOS/Windows).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).read()"
+      interval: 20s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    environment:
+      BACKEND_URL: http://api:8000
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Local-first LLM observability. Run with --profile tracing; no cloud account.
+  phoenix:
+    profiles: ["tracing"]
+    image: arizephoenix/phoenix:latest
+    environment:
+      PHOENIX_WORKING_DIR: /mnt/data
+    volumes:
+      - phoenix_data:/mnt/data
+    ports:
+      - "127.0.0.1:6006:6006"  # UI and OTLP/HTTP on /v1/traces
+    restart: unless-stopped
+
+  # Optional: fully Dockerized Ollama, useful on Linux or if native Ollama
+  # is unavailable. On macOS Docker cannot accelerate this with Apple GPU.
+  # To use: DOCKER_OLLAMA_BASE_URL=http://ollama:11434
+  # then: docker compose --profile cpu-ollama up --build
+  ollama:
+    profiles: ["cpu-ollama"]
+    image: ollama/ollama:latest
+    volumes:
+      - ollama_models:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 20
+    restart: unless-stopped
+
+  pull-model:
+    profiles: ["cpu-ollama"]
+    image: ollama/ollama:latest
+    depends_on:
+      ollama:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["ollama pull '${OLLAMA_MODEL:-qwen3.5:4b}'"]
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    restart: "no"
+
+volumes:
+  postgres_data:
+  huggingface_cache:
+  ollama_models:
+  phoenix_data:

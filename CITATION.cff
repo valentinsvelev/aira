@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+message: "If you use AIRA in your research, please cite it as below."
+title: "AIRA: A local retrieval-augmented AI research assistant"
+type: software
+authors:
+  - given-names: "Valentin"
+    family-names: "Velev"
+    orcid: "https://orcid.org/0009-0006-5098-154X"
+version: 0.1.0
+license: MIT
+repository-code: "https://github.com/valentinsvelev/aira"

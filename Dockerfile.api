@@ -1,0 +1,34 @@
+# Dependencies are cached in their own image layer, so changing Python source code
+# or package version does not reinstall PyTorch/sentence-transformers each rebuild.
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    HF_HOME=/app/.cache/huggingface
+WORKDIR /app
+
+# PyStemmer on linux/arm64 needs a compiler.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Includes the OpenTelemetry packages so tracing works without a separate install.
+COPY requirements-api*.txt ./
+# Persist wheel/download cache across the occasional dependency-image rebuild.
+# The separate requirements layer is reused for normal application changes.
+RUN --mount=type=cache,target=/root/.cache/pip \
+    if [ -f requirements-api.lock.txt ]; then python -m pip install --require-hashes -r requirements-api.lock.txt; else python -m pip install -r requirements-api.txt; fi
+
+COPY pyproject.toml README.md ./
+COPY src/ ./src/
+COPY alembic.ini ./
+COPY alembic/ ./alembic/
+COPY scripts/migrate_sqlite.py ./scripts/migrate_sqlite.py
+RUN python -m pip install --no-deps . \
+    && mkdir -p /app/papers /app/.data /app/.cache/huggingface
+
+EXPOSE 8000
+HEALTHCHECK --interval=20s --timeout=5s --start-period=30s --retries=5 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).read()" || exit 1
+CMD ["uvicorn", "aira.api:app", "--host", "0.0.0.0", "--port", "8000"]

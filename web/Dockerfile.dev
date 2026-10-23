@@ -1,0 +1,20 @@
+# A fast, non-production image for Next.js hot reload.
+# Only dependency manifest changes invalidate the npm install layer.
+FROM node:22-alpine
+WORKDIR /app
+ENV NEXT_TELEMETRY_DISABLED=1
+
+COPY package.json package-lock.json* ./
+RUN --mount=type=cache,target=/root/.npm \
+    if [ -f package-lock.json ]; then \
+      npm ci --no-audit --no-fund; \
+    else \
+      npm install --no-audit --no-fund; \
+    fi \
+    && test -x /app/node_modules/.bin/next \
+    && node -e "require.resolve('next/package.json')"
+
+# Application source arrives through the compose.dev.yml bind mount.
+# This keeps the image independent of ordinary TSX/CSS changes.
+EXPOSE 3000
+CMD ["./node_modules/.bin/next", "dev", "--hostname", "0.0.0.0"]

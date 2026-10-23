@@ -1,0 +1,9 @@
+AIRA demo paper B: Objective retrieval evaluation (synthetic fixture; not a real publication)
+
+Recall at k measures how many labeled relevant documents appear in the top k retrieved results.
+Reciprocal rank places more weight on the first relevant document. nDCG evaluates ranked lists
+and can account for graded relevance. For a valid comparison, use the same labeled corpus,
+query set, cutoff and scoring code across retrieval configurations.
+
+Metrics in the user interface must be computed from labeled relevance judgments, not from
+an LLM grading its own answers. Synthetic demo datasets are not publishable benchmark claims.

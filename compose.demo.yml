@@ -1,0 +1,81 @@
+# Completely separate, isolated demo stack. No personal AIRA Postgres/PDF/analytics volumes.
+# Use: make demo-up  (requires Docker; model inference remains optional)
+name: aira-demo
+services:
+  db:
+    image: pgvector/pgvector:0.8.6-pg16
+    environment:
+      POSTGRES_USER: aira
+      POSTGRES_PASSWORD: demo_only_local
+      POSTGRES_DB: aira
+    volumes:
+      - demo_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aira -d aira"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    environment:
+      DATABASE_URL: postgresql+psycopg://aira:demo_only_local@db:5432/aira
+      PAPERS_DIR: /app/papers
+      LLM_PROVIDER: ollama
+      OLLAMA_MODEL: qwen3.5:4b
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      RETRIEVAL_MODE: sparse
+      OTEL_TRACES_ENABLED: "false"
+      HF_HOME: /app/.cache/huggingface
+      PYTHONPATH: /app/src
+      WATCHFILES_FORCE_POLLING: "true"
+      AIRA_REQUIRE_MIGRATIONS: "true"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./src:/app/src:ro
+      - ./alembic:/app/alembic:ro
+      - ./alembic.ini:/app/alembic.ini:ro
+      - ./demo/workspace/papers:/app/papers
+      - ./demo/workspace/data:/app/.data
+      - demo_hf:/app/.cache/huggingface
+      - ./scripts/start-api-dev.sh:/app/scripts/start-api-dev.sh:ro
+    # Only in the isolated demo: schema upgrades run at startup, before the API.
+    command: ["sh", "-c", "alembic upgrade head && sh /app/scripts/start-api-dev.sh"]
+    ports:
+      - "127.0.0.1:8100:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=3).read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+  web:
+    image: aira-demo-web:dev
+    build:
+      context: ./web
+      dockerfile: Dockerfile.dev
+    environment:
+      NODE_ENV: development
+      BACKEND_URL: http://api:8000
+      NEXT_TELEMETRY_DISABLED: "1"
+      WATCHPACK_POLLING: "true"
+    volumes:
+      - ./web/app:/app/app
+      - ./web/components:/app/components
+      - ./web/lib:/app/lib
+      - ./web/next.config.ts:/app/next.config.ts:ro
+      - ./web/tsconfig.json:/app/tsconfig.json:ro
+      - ./web/next-env.d.ts:/app/next-env.d.ts
+    command: ["./node_modules/.bin/next", "dev", "--hostname", "0.0.0.0"]
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:3100:3000"
+volumes:
+  demo_postgres:
+  demo_hf:

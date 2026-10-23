@@ -1,0 +1,6 @@
+# Small optional tracing dependencies for a previously-built API image.
+# Production installs these via requirements-api.txt; the development image
+# can bootstrap them once into a persistent volume without rebuilding PyTorch.
+opentelemetry-api>=1.28,<2
+opentelemetry-sdk>=1.28,<2
+opentelemetry-exporter-otlp-proto-http>=1.28,<2

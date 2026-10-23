@@ -1,0 +1,30 @@
+# Optional local Airflow 3 orchestration, isolated from AIRA's main PostgreSQL.
+# Usage: docker compose -f compose.yml -f compose.dev.yml -f compose.airflow.yml \
+#          --profile airflow up -d --no-deps airflow
+# Airflow standalone runs API server, scheduler and DAG processor in one dev-only
+# container. Not intended for public or production deployment.
+name: aira
+services:
+  airflow:
+    profiles: ["airflow"]
+    image: apache/airflow:3.1.7
+    command: ["standalone"]
+    environment:
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
+      AIRA_API_URL: http://api:8000
+      AIRA_EMBEDDING_MODEL: ${EMBEDDING_MODEL:-sentence-transformers/all-MiniLM-L6-v2}
+      AIRA_INGEST_SCHEDULE: ${AIRA_INGEST_SCHEDULE:-}
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - airflow_state:/opt/airflow
+      - ./airflow/dags:/opt/airflow/dags:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+volumes:
+  airflow_state:

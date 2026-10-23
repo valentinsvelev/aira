@@ -1,0 +1,16 @@
+# Optional one-shot benchmark analytics (DuckDB+Parquet); no DB migration.
+name: aira
+services:
+  analytics:
+    profiles: ["analytics"]
+    build:
+      context: .
+      dockerfile: Dockerfile.analytics
+    environment:
+      PYTHONPATH: /app/src
+    working_dir: /app
+    volumes:
+      - ./src:/app/src:ro
+      - ./.data:/app/.data
+    command: ["python", "-m", "aira.benchmark_analytics", "--data-dir", "/app/.data"]
+    restart: "no"

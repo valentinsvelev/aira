@@ -1,0 +1,32 @@
+# Secrets and local-only runtime data
+.env
+.env.*
+!.env.example
+.data/
+papers/
+backups/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+.venv/
+
+# Next.js / Node
+web/node_modules/
+web/.next/
+web/.env.local
+
+# Editor/OS
+.DS_Store
+.idea/
+.vscode/
+
+# Local demo workspace, test and coverage output
+demo/workspace/
+*.db-journal
+.coverage
+coverage.xml
+htmlcov/

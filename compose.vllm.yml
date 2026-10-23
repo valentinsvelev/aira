@@ -1,0 +1,36 @@
+# Optional GPU-only vLLM containers, not part of the default development stack.
+# Use: docker compose -f compose.yml -f compose.dev.yml -f compose.vllm.yml \
+#       --profile vllm-asta up -d --no-build vllm-asta api
+# Run one profile at a time unless enough GPU memory is available for both models.
+services:
+  api:
+    environment:
+      SCHOLAR_VLLM_DR_TULU_URL: http://vllm-dr:8000/v1
+      SCHOLAR_VLLM_ASTA_URL: http://vllm-asta:8000/v1
+
+  vllm-dr:
+    profiles: ["vllm-dr"]
+    image: vllm/vllm-openai:latest
+    gpus: all
+    ipc: host
+    command: ["--model", "rl-research/DR-Tulu-8B", "--host", "0.0.0.0", "--port", "8000", "--dtype", "auto", "--max-model-len", "16384"]
+    volumes:
+      - scholar_vllm_cache:/root/.cache/huggingface
+    ports:
+      - "127.0.0.1:8001:8000"
+    restart: unless-stopped
+
+  vllm-asta:
+    profiles: ["vllm-asta"]
+    image: vllm/vllm-openai:latest
+    gpus: all
+    ipc: host
+    command: ["--model", "allenai/AstaBrief_8B", "--host", "0.0.0.0", "--port", "8000", "--dtype", "auto", "--max-model-len", "16384"]
+    volumes:
+      - scholar_vllm_cache:/root/.cache/huggingface
+    ports:
+      - "127.0.0.1:8002:8000"
+    restart: unless-stopped
+
+volumes:
+  scholar_vllm_cache:

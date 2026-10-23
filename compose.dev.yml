@@ -1,0 +1,55 @@
+# Development override for compose.yml.
+# Run: docker compose -f compose.yml -f compose.dev.yml up -d --no-build
+# Code is bind-mounted while dependencies remain in the images.
+name: aira
+
+services:
+  api:
+    # Dependencies stay in the api image; Python source hot reloads.
+    environment:
+      PYTHONPATH: /app/src:/opt/aira-tracing-deps
+      WATCHFILES_FORCE_POLLING: "true"
+    volumes:
+      - ./src:/app/src:ro
+      - ./alembic:/app/alembic:ro
+      - ./alembic.ini:/app/alembic.ini:ro
+      - ./scripts/adopt_alembic.py:/app/scripts/adopt_alembic.py:ro
+      # Tiny, optional OTel packages live in a persistent dev-only volume.
+      # This works with an older API image without reinstalling the ML stack.
+      - tracing_python_deps:/opt/aira-tracing-deps
+      - ./requirements-observability.txt:/app/requirements-observability.txt:ro
+      - ./scripts/start-api-dev.sh:/app/scripts/start-api-dev.sh:ro
+    command: ["sh", "/app/scripts/start-api-dev.sh"]
+
+  web:
+    # Keep the development image distinct from the production web image.
+    # Otherwise a canceled dev build can cause an old production image
+    # (without node_modules) to be reused.
+    image: aira-web:dev
+    # Use Next's fast development server instead of next build.
+    build:
+      context: ./web
+      dockerfile: Dockerfile.dev
+    environment:
+      NODE_ENV: development
+      NEXT_TELEMETRY_DISABLED: "1"
+      WATCHPACK_POLLING: "true"
+    volumes:
+      # IMPORTANT: Do not bind-mount ./web to /app or an empty volume
+      # to /app/node_modules. Either can hide packages installed in the image.
+      # Mount only hot-reloaded source/config paths.
+      - ./web/app:/app/app
+      - ./web/components:/app/components
+      - ./web/lib:/app/lib
+      - ./web/next.config.ts:/app/next.config.ts:ro
+      - ./web/tsconfig.json:/app/tsconfig.json:ro
+      - ./web/next-env.d.ts:/app/next-env.d.ts
+    command:
+      - ./node_modules/.bin/next
+      - dev
+      - --hostname
+      - 0.0.0.0
+
+# Does not interfere with the production PostgreSQL/Hugging Face volumes.
+volumes:
+  tracing_python_deps:

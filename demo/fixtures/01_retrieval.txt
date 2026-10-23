@@ -1,0 +1,9 @@
+AIRA demo paper A: Retrieval and relevance (synthetic fixture; not a real scientific publication)
+
+A retrieval system must select evidence before generating an answer. Sparse keyword ranking
+is especially useful when exact names and terminology matter. Dense retrieval uses embeddings
+to retrieve related text even without exact token overlap. Hybrid retrieval merges rankings
+from sparse and dense retrievers using reciprocal rank fusion.
+
+This synthetic exercise is not a claim of measured superiority for any technique. The sample
+is provided solely to demonstrate document ingestion, evidence inspection, and chat citations.
