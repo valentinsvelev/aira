@@ -10,7 +10,7 @@ from aira.ingestion import Ingestor
 from aira.migrate import migrate
 from aira.options import RetrievalOptions
 from aira.retrieval import LocalRetriever
-from aira.vector_store import DIMENSIONS, GTE_LARGE, EmbeddingIndex
+from aira.vector_store import DIMENSIONS, GTE_LARGE, MINILM, EmbeddingIndex
 
 
 @pytest.mark.integration
@@ -49,7 +49,8 @@ def test_sqlite_migration_and_pgvector_retrieval(tmp_path, monkeypatch):
     def fake_embed(name, texts):
         return [[1.0] + [0.0] * (DIMENSIONS - 1) for _ in texts]
     monkeypatch.setattr('aira.vector_store.embed_texts', fake_embed)
-    model = 'integration-test-local-model'
+    # Index under the default model name: search options select the model per request.
+    model = MINILM
     indexer = EmbeddingIndex(factory, model)
     stats = indexer.sync()
     assert stats['enabled'] and stats['indexed'] >= 1
